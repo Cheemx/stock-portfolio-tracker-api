@@ -1,32 +1,22 @@
 package main
 
 import (
-	"database/sql"
-	"fmt"
 	"log"
-	"os"
 
-	"github.com/joho/godotenv"
+	"github.com/Cheemx/stock-portfolio-tacker-api/internal/config"
+	"github.com/Cheemx/stock-portfolio-tacker-api/internal/routes"
+	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 )
 
+const port = "8080"
+
 func main() {
-	godotenv.Load()
+	r := gin.Default()
 
-	dbURL := os.Getenv("DB_URL")
-	if dbURL == "" {
-		log.Fatal("Can't get DB_URL from .env")
-	}
+	cfg := config.Load()
 
-	db, err := sql.Open("postgres", dbURL)
-	if err != nil {
-		log.Fatal(err)
-	}
-	var now string
-	err = db.QueryRow("SELECT NOW()").Scan(&now)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println("DB connected, current time:", now)
-	fmt.Println("Hello Stocks")
+	routes.UserRoutes(r, cfg)
+	log.Printf("Serving Stock tracker API on port: %s\n", port)
+	log.Fatal(r.Run(":" + port))
 }
