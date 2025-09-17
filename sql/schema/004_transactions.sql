@@ -7,7 +7,6 @@ CREATE TABLE transactions(
     quantity INTEGER NOT NULL,
     price DECIMAL(10, 2) NOT NULL,
     total_amount DECIMAL(10, 2) NOT NULL,
-    fees DECIMAL(10, 2) DEFAULT 0,
     created_at TIMESTAMP NOT NULL
 );
 

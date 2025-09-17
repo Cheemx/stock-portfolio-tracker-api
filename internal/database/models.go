@@ -37,7 +37,6 @@ type Transaction struct {
 	Quantity    int32          `json:"quantity"`
 	Price       string         `json:"price"`
 	TotalAmount string         `json:"total_amount"`
-	Fees        sql.NullString `json:"fees"`
 	CreatedAt   time.Time      `json:"created_at"`
 }
 

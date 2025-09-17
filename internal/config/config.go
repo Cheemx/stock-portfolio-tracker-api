@@ -27,7 +27,7 @@ func Load() *APIConfig {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	// defer db.Close()
 
 	// Get environment variables
 	polyKey := mustGetEnv("POLYGON_API")

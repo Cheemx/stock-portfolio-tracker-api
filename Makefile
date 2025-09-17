@@ -7,5 +7,5 @@ migrationDown:
 	cd sql/schema && goose postgres "postgres://postgres:postgres@localhost:5433/stonk?sslmode=disable" down && cd .. && cd ..
 
 # To connect to stonk db in CLI
-connectDB:
+databaseDikha: 
 	docker exec -it stock-portfolio-tracker-api-postgres-1 psql -U postgres -d stonk

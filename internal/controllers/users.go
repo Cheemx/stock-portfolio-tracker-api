@@ -25,8 +25,9 @@ func CreateUser(cfg *config.APIConfig) gin.HandlerFunc {
 		})
 		if err != nil {
 			ctx.JSON(500, gin.H{
-				"error": "failed to create user",
+				"error": err.Error(),
 			})
+			return
 		}
 
 		// Respond with user data
