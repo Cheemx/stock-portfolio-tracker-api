@@ -66,7 +66,7 @@ func Stocker(cfg *config.APIConfig) {
 }
 
 func FetchFromYahoo(symbol string, client *http.Client) (database.Stock, error) {
-	var yahooResult config.YahooResult
+	var resp config.YahooFinanceResponse
 	reqToStockAPI, err := http.NewRequest("GET", YahooAPI+symbol, nil)
 	if err != nil {
 		return database.Stock{}, err
@@ -85,8 +85,13 @@ func FetchFromYahoo(symbol string, client *http.Client) (database.Stock, error) 
 		body, _ := io.ReadAll(yahooRes.Body)
 		return database.Stock{}, fmt.Errorf("yahoo api error: %s - %s", yahooRes.Status, string(body))
 	}
-	if err := json.NewDecoder(yahooRes.Body).Decode(&yahooResult); err != nil {
+	if err := json.NewDecoder(yahooRes.Body).Decode(&resp); err != nil {
 		return database.Stock{}, err
 	}
+
+	if len(resp.Chart.Result) == 0 {
+		return database.Stock{}, fmt.Errorf("no results in Yahoo response")
+	}
+	yahooResult := resp.Chart.Result[0]
 	return yahooResult.ToStock(), nil
 }

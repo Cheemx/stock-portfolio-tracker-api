@@ -3,6 +3,7 @@ package controllers
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -106,6 +107,7 @@ func CreateTransaction(cfg *config.APIConfig) gin.HandlerFunc {
 			currQuant, _, currAvg, _, _, totalAmount := utils.HandleBuyTransaction(req.Quantity, 0, 0, currPrice)
 
 			// Push transaction in DB
+			log.Printf("Creating txn for user=%s, symbol=%s, price=%s", userId, req.StockSymbol, stonk.CurrentPrice)
 			totalAmountStr := strconv.FormatFloat(totalAmount, 'f', 2, 64)
 			txn, err := cfg.DB.CreateATransaction(ctx, database.CreateATransactionParams{
 				UserID:      userId,
