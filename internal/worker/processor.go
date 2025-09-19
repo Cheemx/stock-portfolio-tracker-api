@@ -29,21 +29,20 @@ func ProcessStocks(cfg *config.APIConfig) {
 
 		for _, stream := range result {
 			for _, message := range stream.Messages {
-				yahooJSON := message.Values["stock"].(string)
-				var yahooResult config.YahooResult
-				err := json.Unmarshal([]byte(yahooJSON), &yahooResult)
+				stockJSON := message.Values["stock"].(string)
+				var stockRes database.Stock
+				err := json.Unmarshal([]byte(stockJSON), &stockRes)
 				if err != nil {
 					log.Printf("Error unmarshaling event: %v\n", err)
 					continue
 				}
 
 				// store in Postgres DB
-				stock := yahooResult.ToStock()
 				_, err = cfg.DB.CreateNewStockOrUpdateExisting(context.Background(), database.CreateNewStockOrUpdateExistingParams{
-					Symbol:        stock.Symbol,
-					CompanyName:   stock.CompanyName,
-					CurrentPrice:  stock.CurrentPrice,
-					PreviousClose: stock.PreviousClose,
+					Symbol:        stockRes.Symbol,
+					CompanyName:   stockRes.CompanyName,
+					CurrentPrice:  stockRes.CurrentPrice,
+					PreviousClose: stockRes.PreviousClose,
 				})
 
 				if err != nil {

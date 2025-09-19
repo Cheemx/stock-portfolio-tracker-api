@@ -3,19 +3,20 @@ package worker
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/config"
+	"github.com/Cheemx/stock-portfolio-tacker-api/internal/database"
 	"github.com/redis/go-redis/v9"
 )
 
 const YahooAPI = "https://query1.finance.yahoo.com/v8/finance/chart/"
 
 func Stocker(cfg *config.APIConfig) {
-	var yahooResult config.YahooResult
-
 	// DB call to get all symbol for current user
 	// symbols is list of symbols for holdings owned all userbase
 	symbols, err := cfg.DB.GetStockSymbolsOfHoldings(context.Background())
@@ -43,25 +44,15 @@ func Stocker(cfg *config.APIConfig) {
 		}
 		client := &http.Client{}
 		for _, symbol := range symbols {
-			reqToStockAPI, err := http.NewRequest("GET", YahooAPI+symbol, nil)
+			stockRes, err := FetchFromYahoo(symbol, client)
 			if err != nil {
-				log.Printf("Error creating HTTP request to API: %v\n", err)
+				log.Printf("error fetching from YahooAPI: %v\n", err)
 				continue
 			}
-
-			yahooRes, err := client.Do(reqToStockAPI)
-			if err != nil {
-				log.Printf("Error making Free API Call: %v\n", err)
-				continue
-			}
-			if err := json.NewDecoder(yahooRes.Body).Decode(&yahooResult); err != nil {
-				log.Print("Error decoding response from free API in YahooResult\n")
-				continue
-			}
-			yahooJSON, _ := json.Marshal(yahooResult)
+			stockJSON, _ := json.Marshal(stockRes)
 			err = cfg.RD.XAdd(context.Background(), &redis.XAddArgs{
 				Stream: "events:liveStocks",
-				Values: map[string]any{"stock": string(yahooJSON)},
+				Values: map[string]any{"stock": string(stockJSON)},
 				MaxLen: 100,
 				Approx: true,
 			}).Err()
@@ -72,4 +63,30 @@ func Stocker(cfg *config.APIConfig) {
 			}
 		}
 	}
+}
+
+func FetchFromYahoo(symbol string, client *http.Client) (database.Stock, error) {
+	var yahooResult config.YahooResult
+	reqToStockAPI, err := http.NewRequest("GET", YahooAPI+symbol, nil)
+	if err != nil {
+		return database.Stock{}, err
+	}
+
+	// Adding headers to avoid 429 from YahooAPI
+	reqToStockAPI.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+	reqToStockAPI.Header.Set("Accept", "application/json")
+
+	yahooRes, err := client.Do(reqToStockAPI)
+	if err != nil {
+		return database.Stock{}, err
+	}
+	defer yahooRes.Body.Close()
+	if yahooRes.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(yahooRes.Body)
+		return database.Stock{}, fmt.Errorf("yahoo api error: %s - %s", yahooRes.Status, string(body))
+	}
+	if err := json.NewDecoder(yahooRes.Body).Decode(&yahooResult); err != nil {
+		return database.Stock{}, err
+	}
+	return yahooResult.ToStock(), nil
 }
