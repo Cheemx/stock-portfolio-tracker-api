@@ -222,3 +222,31 @@ func CreateTransaction(cfg *config.APIConfig) gin.HandlerFunc {
 		})
 	}
 }
+
+func GetTransactions(cfg *config.APIConfig) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		// check for authorization header
+		token, err := auth.GetBearerToken(ctx.Request.Header)
+		if err != nil {
+			respondWithError(ctx, 401, "error getting token from header", err)
+			return
+		}
+
+		// get userId from token
+		userId, err := auth.ValidateJWT(token, cfg.JWTSecret)
+		if err != nil {
+			respondWithError(ctx, 401, "error validating JWT", err)
+			return
+		}
+
+		// get transactions for userId
+		txns, err := cfg.DB.GetAllTransactionsForUser(ctx, userId)
+		if err != nil {
+			respondWithError(ctx, 500, "error getting transactions", err)
+			return
+		}
+
+		// return the transactions
+		ctx.JSON(200, txns)
+	}
+}
