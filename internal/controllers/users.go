@@ -22,18 +22,14 @@ func CreateUser(cfg *config.APIConfig) gin.HandlerFunc {
 
 		// Bind JSON to req struct
 		if err := ctx.ShouldBindJSON(&req); err != nil {
-			ctx.JSON(401, gin.H{
-				"error": "invalid request payload",
-			})
+			respondWithError(ctx, 401, "error unmarshalling request", err)
 			return
 		}
 
 		// hashing the text password from req
 		hashedPass, err := auth.HashPassword(req.Password)
 		if err != nil {
-			ctx.JSON(500, gin.H{
-				"error": "Error in auth package hashing password",
-			})
+			respondWithError(ctx, 500, "error hashing password", err)
 			return
 		}
 
@@ -44,9 +40,7 @@ func CreateUser(cfg *config.APIConfig) gin.HandlerFunc {
 			HashedPassword: hashedPass,
 		})
 		if err != nil {
-			ctx.JSON(500, gin.H{
-				"error": err.Error(),
-			})
+			respondWithError(ctx, 500, "error creating user", err)
 			return
 		}
 
@@ -78,36 +72,28 @@ func LoginUser(cfg *config.APIConfig) gin.HandlerFunc {
 
 		// Bind JSON to req struct
 		if err := ctx.ShouldBindJSON(&req); err != nil {
-			ctx.JSON(401, gin.H{
-				"error": "invalid request payload",
-			})
+			respondWithError(ctx, 401, "error unmarshalling request", err)
 			return
 		}
 
 		// Get User by Email
 		user, err := cfg.DB.GetUserByEmail(ctx, req.Email)
 		if err != nil {
-			ctx.JSON(401, gin.H{
-				"error": "user with this email not found",
-			})
+			respondWithError(ctx, 401, "user with email not found", err)
 			return
 		}
 
 		// validating password
 		err = auth.CheckPasswordHash(req.Password, user.HashedPassword)
 		if err != nil {
-			ctx.JSON(401, gin.H{
-				"error": "email password not matching!",
-			})
+			respondWithError(ctx, 401, "email and password doesn't match", err)
 			return
 		}
 
 		// Create the Access Token
 		token, err := auth.MakeJWT(user.ID, cfg.JWTSecret, 3600*time.Second)
 		if err != nil {
-			ctx.JSON(500, gin.H{
-				"error": "Error making JWT",
-			})
+			respondWithError(ctx, 500, "error making token", err)
 			return
 		}
 
@@ -139,8 +125,7 @@ func DeleteUsers(cfg *config.APIConfig) gin.HandlerFunc {
 
 		err := cfg.DB.DeleteAllUsers(ctx)
 		if err != nil {
-			log.Printf("Error Deleting all Users: %v", err)
-			ctx.Writer.WriteHeader(500)
+			respondWithError(ctx, 500, "error deleting all users", err)
 			return
 		}
 		log.Println("All Users Deleted Successfully.")

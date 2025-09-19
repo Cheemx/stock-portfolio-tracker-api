@@ -30,6 +30,7 @@ func main() {
 	go worker.ProcessStocks(cfg)
 
 	routes.UserRoutes(r, cfg)
+	routes.TransactionRoutes(r, cfg)
 	log.Printf("Serving Stock tracker API on port: %s\n", port)
 	log.Fatal(r.Run(":" + port))
 }
