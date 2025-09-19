@@ -8,4 +8,6 @@ import (
 
 func UserRoutes(router *gin.Engine, cfg *config.APIConfig) {
 	router.POST("/api/users", controllers.CreateUser(cfg))
+	router.POST("/admin/reset", controllers.DeleteUsers(cfg))
+	router.POST("/api/login", controllers.LoginUser(cfg))
 }

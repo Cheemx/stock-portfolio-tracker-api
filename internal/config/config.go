@@ -1,18 +1,21 @@
 package config
 
 import (
+	"context"
 	"database/sql"
+	"fmt"
 	"log"
 	"os"
 
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/database"
 	"github.com/joho/godotenv"
+	"github.com/redis/go-redis/v9"
 )
 
 type APIConfig struct {
-	DB       *database.Queries
-	PolyKey  string
-	AlphaKey string
+	DB        *database.Queries
+	RD        *redis.Client
+	JWTSecret string
 }
 
 func Load() *APIConfig {
@@ -29,16 +32,28 @@ func Load() *APIConfig {
 	}
 	// defer db.Close()
 
-	// Get environment variables
-	polyKey := mustGetEnv("POLYGON_API")
-	alphaKey := mustGetEnv("ALPHA_API")
+	// Connect with redis client
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       0,
+	})
+
+	// Adding a redis consumer group
+	err = rdb.XGroupCreateMkStream(context.Background(), "events:liveStocks", "events-group", "0").Err()
+	if err != nil && err.Error() != "BUSYGROUP Consumer Group name already exists" {
+		log.Printf("Error creating consumer group: %v", err)
+	}
+	fmt.Println("Redis Stream Created successfully!")
 
 	dbQueries := database.New(db)
 	cfg := &APIConfig{
-		DB:       dbQueries,
-		PolyKey:  polyKey,
-		AlphaKey: alphaKey,
+		DB:        dbQueries,
+		RD:        rdb,
+		JWTSecret: mustGetEnv("JWT_SECRET"),
 	}
+	fmt.Println("Redis Client Connected Successfully.")
+	fmt.Println("Postgres Database Connected Successfully.")
 	return cfg
 }
 
