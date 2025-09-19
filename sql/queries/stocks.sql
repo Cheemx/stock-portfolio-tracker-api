@@ -1,4 +1,4 @@
--- name: CreateNewStock :one
+-- name: CreateNewStockOrUpdateExisting :one
 INSERT INTO stocks(symbol, company_name, current_price, previous_close, updated_at)
 VALUES (
     $1,
@@ -7,6 +7,12 @@ VALUES (
     $4,
     NOW()
 )
+ON CONFLICT (symbol) DO UPDATE
+SET 
+    company_name = EXCLUDED.company_name,
+    current_price = EXCLUDED.current_price,
+    previous_close = EXCLUDED.previous_close,
+    updated_at = NOW()
 RETURNING *;
 
 -- name: GetStockBySymbol :one

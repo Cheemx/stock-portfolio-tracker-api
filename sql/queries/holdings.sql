@@ -15,28 +15,28 @@ WHERE holdings.user_id = $1;
 DELETE FROM holdings 
 WHERE holdings.user_id = $1 AND holdings.stock_symbol = $2;
 
--- name: CreateHoldingForUser :one
+-- name: CreateNewHoldingOrUpdateExistingForUser :one
 INSERT INTO holdings(id, user_id, stock_symbol, quantity, average_price, created_at, updated_at)
 VALUES (
     gen_random_uuid(),
-    $1,
-    $2,
-    $3,
-    $4,
+    $1,  -- user_id
+    $2,  -- stock_symbol
+    $3,  -- quantity
+    $4,  -- average_price
     NOW(),
     NOW()
 )
-RETURNING *;
-
--- name: UpdateHoldingOnTransaction :one
-UPDATE holdings
+ON CONFLICT (user_id, stock_symbol) DO UPDATE
 SET 
-    quantity = $1,
-    average_price = $2,
-    updated_at = NOW()
-WHERE user_id = $3 AND stock_symbol = $4
+    quantity      = EXCLUDED.quantity,
+    average_price = EXCLUDED.average_price,
+    updated_at    = NOW()
 RETURNING *;
 
 -- name: GetHoldingByStockSymbol :one
 SELECT * FROM holdings
 WHERE user_id = $1 AND stock_symbol = $2;
+
+-- name: GetStockSymbolsOfHoldings :many
+SELECT DISTINCT stock_symbol
+FROM holdings;

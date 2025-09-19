@@ -7,34 +7,38 @@ package database
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/google/uuid"
 )
 
-const createHoldingForUser = `-- name: CreateHoldingForUser :one
+const createNewHoldingOrUpdateExistingForUser = `-- name: CreateNewHoldingOrUpdateExistingForUser :one
 INSERT INTO holdings(id, user_id, stock_symbol, quantity, average_price, created_at, updated_at)
 VALUES (
     gen_random_uuid(),
-    $1,
-    $2,
-    $3,
-    $4,
+    $1,  -- user_id
+    $2,  -- stock_symbol
+    $3,  -- quantity
+    $4,  -- average_price
     NOW(),
     NOW()
 )
+ON CONFLICT (user_id, stock_symbol) DO UPDATE
+SET 
+    quantity      = EXCLUDED.quantity,
+    average_price = EXCLUDED.average_price,
+    updated_at    = NOW()
 RETURNING id, user_id, stock_symbol, quantity, average_price, created_at, updated_at
 `
 
-type CreateHoldingForUserParams struct {
-	UserID       uuid.NullUUID  `json:"user_id"`
-	StockSymbol  sql.NullString `json:"stock_symbol"`
-	Quantity     int32          `json:"quantity"`
-	AveragePrice string         `json:"average_price"`
+type CreateNewHoldingOrUpdateExistingForUserParams struct {
+	UserID       uuid.UUID `json:"user_id"`
+	StockSymbol  string    `json:"stock_symbol"`
+	Quantity     int32     `json:"quantity"`
+	AveragePrice string    `json:"average_price"`
 }
 
-func (q *Queries) CreateHoldingForUser(ctx context.Context, arg CreateHoldingForUserParams) (Holding, error) {
-	row := q.db.QueryRowContext(ctx, createHoldingForUser,
+func (q *Queries) CreateNewHoldingOrUpdateExistingForUser(ctx context.Context, arg CreateNewHoldingOrUpdateExistingForUserParams) (Holding, error) {
+	row := q.db.QueryRowContext(ctx, createNewHoldingOrUpdateExistingForUser,
 		arg.UserID,
 		arg.StockSymbol,
 		arg.Quantity,
@@ -59,8 +63,8 @@ WHERE holdings.user_id = $1 AND holdings.stock_symbol = $2
 `
 
 type DeleteHoldingsOnSellOutParams struct {
-	UserID      uuid.NullUUID  `json:"user_id"`
-	StockSymbol sql.NullString `json:"stock_symbol"`
+	UserID      uuid.UUID `json:"user_id"`
+	StockSymbol string    `json:"stock_symbol"`
 }
 
 func (q *Queries) DeleteHoldingsOnSellOut(ctx context.Context, arg DeleteHoldingsOnSellOutParams) (int64, error) {
@@ -86,15 +90,15 @@ WHERE holdings.user_id = $1
 `
 
 type GetAllHoldingsForUserRow struct {
-	StockSymbol  sql.NullString `json:"stock_symbol"`
-	CompanyName  string         `json:"company_name"`
-	Quantity     int32          `json:"quantity"`
-	AveragePrice string         `json:"average_price"`
-	CurrentPrice string         `json:"current_price"`
-	CurrentValue int32          `json:"current_value"`
+	StockSymbol  string `json:"stock_symbol"`
+	CompanyName  string `json:"company_name"`
+	Quantity     int32  `json:"quantity"`
+	AveragePrice string `json:"average_price"`
+	CurrentPrice string `json:"current_price"`
+	CurrentValue int32  `json:"current_value"`
 }
 
-func (q *Queries) GetAllHoldingsForUser(ctx context.Context, userID uuid.NullUUID) ([]GetAllHoldingsForUserRow, error) {
+func (q *Queries) GetAllHoldingsForUser(ctx context.Context, userID uuid.UUID) ([]GetAllHoldingsForUserRow, error) {
 	rows, err := q.db.QueryContext(ctx, getAllHoldingsForUser, userID)
 	if err != nil {
 		return nil, err
@@ -130,8 +134,8 @@ WHERE user_id = $1 AND stock_symbol = $2
 `
 
 type GetHoldingByStockSymbolParams struct {
-	UserID      uuid.NullUUID  `json:"user_id"`
-	StockSymbol sql.NullString `json:"stock_symbol"`
+	UserID      uuid.UUID `json:"user_id"`
+	StockSymbol string    `json:"stock_symbol"`
 }
 
 func (q *Queries) GetHoldingByStockSymbol(ctx context.Context, arg GetHoldingByStockSymbolParams) (Holding, error) {
@@ -149,39 +153,30 @@ func (q *Queries) GetHoldingByStockSymbol(ctx context.Context, arg GetHoldingByS
 	return i, err
 }
 
-const updateHoldingOnTransaction = `-- name: UpdateHoldingOnTransaction :one
-UPDATE holdings
-SET 
-    quantity = $1,
-    average_price = $2,
-    updated_at = NOW()
-WHERE user_id = $3 AND stock_symbol = $4
-RETURNING id, user_id, stock_symbol, quantity, average_price, created_at, updated_at
+const getStockSymbolsOfHoldings = `-- name: GetStockSymbolsOfHoldings :many
+SELECT DISTINCT stock_symbol
+FROM holdings
 `
 
-type UpdateHoldingOnTransactionParams struct {
-	Quantity     int32          `json:"quantity"`
-	AveragePrice string         `json:"average_price"`
-	UserID       uuid.NullUUID  `json:"user_id"`
-	StockSymbol  sql.NullString `json:"stock_symbol"`
-}
-
-func (q *Queries) UpdateHoldingOnTransaction(ctx context.Context, arg UpdateHoldingOnTransactionParams) (Holding, error) {
-	row := q.db.QueryRowContext(ctx, updateHoldingOnTransaction,
-		arg.Quantity,
-		arg.AveragePrice,
-		arg.UserID,
-		arg.StockSymbol,
-	)
-	var i Holding
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.StockSymbol,
-		&i.Quantity,
-		&i.AveragePrice,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
+func (q *Queries) GetStockSymbolsOfHoldings(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getStockSymbolsOfHoldings)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var stock_symbol string
+		if err := rows.Scan(&stock_symbol); err != nil {
+			return nil, err
+		}
+		items = append(items, stock_symbol)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

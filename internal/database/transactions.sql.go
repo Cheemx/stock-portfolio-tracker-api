@@ -7,7 +7,6 @@ package database
 
 import (
 	"context"
-	"database/sql"
 
 	"github.com/google/uuid"
 )
@@ -28,12 +27,12 @@ RETURNING id, user_id, stock_symbol, type, quantity, price, total_amount, create
 `
 
 type CreateATransactionParams struct {
-	UserID      uuid.NullUUID  `json:"user_id"`
-	StockSymbol sql.NullString `json:"stock_symbol"`
-	Type        sql.NullString `json:"type"`
-	Quantity    int32          `json:"quantity"`
-	Price       string         `json:"price"`
-	TotalAmount string         `json:"total_amount"`
+	UserID      uuid.UUID `json:"user_id"`
+	StockSymbol string    `json:"stock_symbol"`
+	Type        string    `json:"type"`
+	Quantity    int32     `json:"quantity"`
+	Price       string    `json:"price"`
+	TotalAmount string    `json:"total_amount"`
 }
 
 func (q *Queries) CreateATransaction(ctx context.Context, arg CreateATransactionParams) (Transaction, error) {
@@ -66,7 +65,7 @@ ORDER BY created_at DESC
 LIMIT 10
 `
 
-func (q *Queries) GetAllTransactionsForUser(ctx context.Context, userID uuid.NullUUID) ([]Transaction, error) {
+func (q *Queries) GetAllTransactionsForUser(ctx context.Context, userID uuid.UUID) ([]Transaction, error) {
 	rows, err := q.db.QueryContext(ctx, getAllTransactionsForUser, userID)
 	if err != nil {
 		return nil, err

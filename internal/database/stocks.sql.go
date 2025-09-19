@@ -10,7 +10,7 @@ import (
 	"database/sql"
 )
 
-const createNewStock = `-- name: CreateNewStock :one
+const createNewStockOrUpdateExisting = `-- name: CreateNewStockOrUpdateExisting :one
 INSERT INTO stocks(symbol, company_name, current_price, previous_close, updated_at)
 VALUES (
     $1,
@@ -19,18 +19,24 @@ VALUES (
     $4,
     NOW()
 )
+ON CONFLICT (symbol) DO UPDATE
+SET 
+    company_name = EXCLUDED.company_name,
+    current_price = EXCLUDED.current_price,
+    previous_close = EXCLUDED.previous_close,
+    updated_at = NOW()
 RETURNING symbol, company_name, current_price, previous_close, updated_at
 `
 
-type CreateNewStockParams struct {
+type CreateNewStockOrUpdateExistingParams struct {
 	Symbol        string         `json:"symbol"`
 	CompanyName   string         `json:"company_name"`
 	CurrentPrice  string         `json:"current_price"`
 	PreviousClose sql.NullString `json:"previous_close"`
 }
 
-func (q *Queries) CreateNewStock(ctx context.Context, arg CreateNewStockParams) (Stock, error) {
-	row := q.db.QueryRowContext(ctx, createNewStock,
+func (q *Queries) CreateNewStockOrUpdateExisting(ctx context.Context, arg CreateNewStockOrUpdateExistingParams) (Stock, error) {
+	row := q.db.QueryRowContext(ctx, createNewStockOrUpdateExisting,
 		arg.Symbol,
 		arg.CompanyName,
 		arg.CurrentPrice,

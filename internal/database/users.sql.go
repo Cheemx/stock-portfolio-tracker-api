@@ -10,29 +10,60 @@ import (
 )
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users(id, email, name, created_at)
+INSERT INTO users(id, email, name, created_at, hashed_password)
 VALUES (
     gen_random_uuid(),
     $1,
     $2,
-    NOW()
+    NOW(),
+    $3
 )
-RETURNING id, email, name, created_at
+RETURNING id, email, name, created_at, hashed_password
 `
 
 type CreateUserParams struct {
-	Email string `json:"email"`
-	Name  string `json:"name"`
+	Email          string `json:"email"`
+	Name           string `json:"name"`
+	HashedPassword string `json:"hashed_password"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, createUser, arg.Email, arg.Name)
+	row := q.db.QueryRowContext(ctx, createUser, arg.Email, arg.Name, arg.HashedPassword)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.Name,
 		&i.CreatedAt,
+		&i.HashedPassword,
+	)
+	return i, err
+}
+
+const deleteAllUsers = `-- name: DeleteAllUsers :exec
+TRUNCATE TABLE users CASCADE
+`
+
+func (q *Queries) DeleteAllUsers(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllUsers)
+	return err
+}
+
+const getUserByEmail = `-- name: GetUserByEmail :one
+SELECT id, email, name, created_at, hashed_password
+FROM users
+WHERE email = $1
+`
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByEmail, email)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Name,
+		&i.CreatedAt,
+		&i.HashedPassword,
 	)
 	return i, err
 }
