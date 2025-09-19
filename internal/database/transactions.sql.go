@@ -96,3 +96,45 @@ func (q *Queries) GetAllTransactionsForUser(ctx context.Context, userID uuid.UUI
 	}
 	return items, nil
 }
+
+const getAllTransactionsForUserBySymbol = `-- name: GetAllTransactionsForUserBySymbol :many
+SELECT id, user_id, stock_symbol, type, quantity, price, total_amount, created_at FROM transactions
+WHERE user_id = $1 AND stock_symbol = $2
+`
+
+type GetAllTransactionsForUserBySymbolParams struct {
+	UserID      uuid.UUID `json:"user_id"`
+	StockSymbol string    `json:"stock_symbol"`
+}
+
+func (q *Queries) GetAllTransactionsForUserBySymbol(ctx context.Context, arg GetAllTransactionsForUserBySymbolParams) ([]Transaction, error) {
+	rows, err := q.db.QueryContext(ctx, getAllTransactionsForUserBySymbol, arg.UserID, arg.StockSymbol)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Transaction
+	for rows.Next() {
+		var i Transaction
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.StockSymbol,
+			&i.Type,
+			&i.Quantity,
+			&i.Price,
+			&i.TotalAmount,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

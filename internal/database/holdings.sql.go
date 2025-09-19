@@ -15,10 +15,10 @@ const createNewHoldingOrUpdateExistingForUser = `-- name: CreateNewHoldingOrUpda
 INSERT INTO holdings(id, user_id, stock_symbol, quantity, average_price, created_at, updated_at)
 VALUES (
     gen_random_uuid(),
-    $1,  -- user_id
-    $2,  -- stock_symbol
-    $3,  -- quantity
-    $4,  -- average_price
+    $1,  
+    $2,  
+    $3,  
+    $4,  
     NOW(),
     NOW()
 )
@@ -81,8 +81,7 @@ SELECT
     stocks.company_name AS company_name,
     holdings.quantity AS quantity,
     holdings.average_price AS average_price,
-    stocks.current_price AS current_price,
-    (holdings.quantity * stocks.current_price) AS current_value
+    stocks.current_price AS current_price
 FROM holdings
 JOIN stocks
 ON holdings.stock_symbol = stocks.symbol
@@ -95,7 +94,6 @@ type GetAllHoldingsForUserRow struct {
 	Quantity     int32  `json:"quantity"`
 	AveragePrice string `json:"average_price"`
 	CurrentPrice string `json:"current_price"`
-	CurrentValue int32  `json:"current_value"`
 }
 
 func (q *Queries) GetAllHoldingsForUser(ctx context.Context, userID uuid.UUID) ([]GetAllHoldingsForUserRow, error) {
@@ -113,7 +111,6 @@ func (q *Queries) GetAllHoldingsForUser(ctx context.Context, userID uuid.UUID) (
 			&i.Quantity,
 			&i.AveragePrice,
 			&i.CurrentPrice,
-			&i.CurrentValue,
 		); err != nil {
 			return nil, err
 		}
