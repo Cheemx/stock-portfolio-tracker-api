@@ -12,21 +12,22 @@ import (
 )
 
 type Holding struct {
-	ID           uuid.UUID `json:"id"`
-	UserID       uuid.UUID `json:"user_id"`
-	StockSymbol  string    `json:"stock_symbol"`
-	Quantity     int32     `json:"quantity"`
-	AveragePrice string    `json:"average_price"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID            uuid.UUID `json:"id"`
+	UserID        uuid.UUID `json:"user_id"`
+	StockSymbol   string    `json:"stock_symbol"`
+	Quantity      int32     `json:"quantity"`
+	AveragePrice  float64   `json:"average_price"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	TotalInvested float64   `json:"total_invested"`
 }
 
 type Stock struct {
-	Symbol        string         `json:"symbol"`
-	CompanyName   string         `json:"company_name"`
-	CurrentPrice  string         `json:"current_price"`
-	PreviousClose sql.NullString `json:"previous_close"`
-	UpdatedAt     time.Time      `json:"updated_at"`
+	Symbol        string          `json:"symbol"`
+	CompanyName   string          `json:"company_name"`
+	CurrentPrice  float64         `json:"current_price"`
+	PreviousClose sql.NullFloat64 `json:"previous_close"`
+	UpdatedAt     time.Time       `json:"updated_at"`
 }
 
 type Transaction struct {
@@ -35,8 +36,8 @@ type Transaction struct {
 	StockSymbol string    `json:"stock_symbol"`
 	Type        string    `json:"type"`
 	Quantity    int32     `json:"quantity"`
-	Price       string    `json:"price"`
-	TotalAmount string    `json:"total_amount"`
+	Price       float64   `json:"price"`
+	TotalAmount float64   `json:"total_amount"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 

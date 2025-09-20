@@ -2,7 +2,6 @@ package config
 
 import (
 	"database/sql"
-	"fmt"
 	"time"
 
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/database"
@@ -52,8 +51,8 @@ func (yr *YahooResult) ToStock() database.Stock {
 	return database.Stock{
 		Symbol:        yr.Meta.Symbol,
 		CompanyName:   yr.Meta.LongName,
-		CurrentPrice:  fmt.Sprintf("%.2f", yr.Meta.RegularMarketPrice),
-		PreviousClose: sql.NullString{String: fmt.Sprintf("%.2f", yr.Meta.PreviousClose), Valid: true},
+		CurrentPrice:  yr.Meta.RegularMarketPrice,
+		PreviousClose: sql.NullFloat64{Float64: yr.Meta.PreviousClose, Valid: true},
 		UpdatedAt:     time.Now(),
 	}
 }

@@ -1,11 +1,11 @@
 package controllers
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
-	"log"
 	"net/http"
-	"strconv"
 
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/auth"
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/config"
@@ -22,221 +22,152 @@ const (
 
 func CreateTransaction(cfg *config.APIConfig) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		// Authorization required for this route
-		token, err := auth.GetBearerToken(ctx.Request.Header)
+		// Authenticated route niga!
+		userId, err := auth.GetUserID(ctx.Request.Header, cfg.JWTSecret)
 		if err != nil {
-			respondWithError(ctx, 401, "unauthorized access", err)
+			respondWithError(ctx, http.StatusUnauthorized, "Authentication error", err)
 			return
 		}
 
-		// get UserID from token
-		userId, err := auth.ValidateJWT(token, cfg.JWTSecret)
-		if err != nil {
-			respondWithError(ctx, 401, "token doesn't match", err)
-			return
-		}
-
-		// expected request body
-		req := struct {
+		// Parse request
+		var req struct {
 			StockSymbol string `json:"stock_symbol"`
 			Type        string `json:"type"`
 			Quantity    int    `json:"quantity"`
-		}{}
-
-		// Bind JSON to req struct
+		}
 		if err := ctx.ShouldBindJSON(&req); err != nil {
-			respondWithError(ctx, http.StatusBadRequest, "error unmarshalling request", err)
+			respondWithError(ctx, http.StatusBadRequest, "Invalid request body", err)
 			return
 		}
-
-		// Validating the request
 		if req.Quantity <= 0 || (req.Type != buy && req.Type != sell) {
-			respondWithError(ctx, http.StatusBadRequest, "You can only BUY or SELL positive stocks", nil)
+			respondWithError(ctx, http.StatusBadRequest, "Quantity must be > 0 and type must be BUY/SELL", nil)
 			return
 		}
 
-		// get the stock info which user is buying
-		var stonk database.Stock
-		stonk, err = cfg.DB.GetStockBySymbol(ctx, req.StockSymbol)
+		// Get stock info
+		stonk, err := getOrFetchStock(ctx, cfg, req.StockSymbol)
 		if err != nil {
-			var client http.Client
-			if err == sql.ErrNoRows {
-				stonkFromYahoo, err := worker.FetchFromYahoo(req.StockSymbol, &client)
-				if err != nil {
-					respondWithError(ctx, 500, "error fetching stock data from API", err)
-					return
-				}
-				stonk, err = cfg.DB.CreateNewStockOrUpdateExisting(ctx, database.CreateNewStockOrUpdateExistingParams{
-					Symbol:        stonkFromYahoo.Symbol,
-					CompanyName:   stonkFromYahoo.CompanyName,
-					CurrentPrice:  stonkFromYahoo.CurrentPrice,
-					PreviousClose: stonkFromYahoo.PreviousClose,
-				})
-				if err != nil {
-					respondWithError(ctx, 500, "error upserting fresh stock data", err)
-					return
-				}
-			} else {
-				respondWithError(ctx, 500, "error getting stonk from database", err)
-				return
-			}
-		}
-		// parsing current stock price stored in db in float64
-		currPrice, err := strconv.ParseFloat(stonk.CurrentPrice, 64)
-		if err != nil {
-			respondWithError(ctx, 500, "error parsing current Stock price", err)
+			respondWithError(ctx, http.StatusInternalServerError, "Failed to resolve stock info", err)
 			return
 		}
 
-		// get user's current holdings for given stock
-		currHoldings, err := cfg.DB.GetHoldingByStockSymbol(ctx, database.GetHoldingByStockSymbolParams{
+		// Get current holdings for user
+		currHolding, err := cfg.DB.GetHoldingByStockSymbol(ctx, database.GetHoldingByStockSymbolParams{
 			UserID:      userId,
 			StockSymbol: req.StockSymbol,
 		})
-		if err != nil && err != sql.ErrNoRows {
-			respondWithError(ctx, 500, "error getting current holdings", err)
+		isNewHolding := errors.Is(err, sql.ErrNoRows)
+		if err != nil && !isNewHolding {
+			respondWithError(ctx, http.StatusInternalServerError, "Error fetching holdings", err)
 			return
 		}
 
-		// If new User or buying first time
-		if err == sql.ErrNoRows {
+		// Compute transaction outcome
+		var (
+			newQuantity int
+			newAvg      float64
+			totalAmount float64
+		)
+		if isNewHolding {
+			// Cannot sell if no holdings
 			if req.Type == sell {
-				respondWithError(ctx, http.StatusBadRequest, "You can't sell the stocks you don't own", nil)
+				respondWithError(ctx, http.StatusBadRequest, "Can't sell the stock you don't OWN niga!", nil)
 				return
 			}
-			currQuant, _, currAvg, _, _, totalAmount := utils.HandleBuyTransaction(req.Quantity, 0, 0, currPrice)
-
-			// Push transaction in DB
-			log.Printf("Creating txn for user=%s, symbol=%s, price=%s", userId, req.StockSymbol, stonk.CurrentPrice)
-			totalAmountStr := strconv.FormatFloat(totalAmount, 'f', 2, 64)
-			txn, err := cfg.DB.CreateATransaction(ctx, database.CreateATransactionParams{
-				UserID:      userId,
-				StockSymbol: req.StockSymbol,
-				Type:        buy,
-				Quantity:    int32(req.Quantity),
-				Price:       stonk.CurrentPrice,
-				TotalAmount: totalAmountStr,
-			})
-			if err != nil {
-				respondWithError(ctx, 500, "error flushing txn in DB", err)
-				return
+			newQuantity, _, newAvg, _, _, totalAmount =
+				utils.HandleBuyTransaction(req.Quantity, 0, 0, stonk.CurrentPrice)
+		} else {
+			switch req.Type {
+			case buy:
+				newQuantity, _, newAvg, _, _, totalAmount =
+					utils.HandleBuyTransaction(req.Quantity, int(currHolding.Quantity), currHolding.AveragePrice, stonk.CurrentPrice)
+				currHolding.TotalInvested += totalAmount
+			case sell:
+				newQuantity, _, newAvg, _, _, totalAmount =
+					utils.HandleSellTransaction(req.Quantity, int(currHolding.Quantity), currHolding.AveragePrice, stonk.CurrentPrice)
+				currHolding.TotalInvested -= totalAmount
 			}
-
-			// Update the user's holdings based on this transaction
-			currAvgPrice := strconv.FormatFloat(currAvg, 'f', 2, 64)
-			holding, err := cfg.DB.CreateNewHoldingOrUpdateExistingForUser(ctx, database.CreateNewHoldingOrUpdateExistingForUserParams{
-				UserID:       userId,
-				StockSymbol:  txn.StockSymbol,
-				Quantity:     int32(currQuant),
-				AveragePrice: currAvgPrice,
-			})
-			if err != nil {
-				respondWithError(ctx, 500, "error creating holding in DB", err)
-				return
-			}
-
-			// Use totalInvested, pnl, pnlPercentage for portfolio as we're not using any table for portfolio then probably we'll think of something here
-			// -- name: GetPortfolioForUser :one
-			// SELECT
-			//         SUM(holdings.quantity * holdings.average_price) AS total_invested,
-			//         SUM(holdings.quantity * stocks.current_price) AS current_value,
-			//         COUNT(holdings.user_id) AS holdings_count
-			// FROM holdings
-			// JOIN users
-			// ON holdings.user_id = users.id
-			// JOIN stocks
-			// ON holdings.stock_symbol = stocks.symbol
-			// WHERE users.id = $1
-			// GROUP BY holdings.user_id;
-			// Above is the kinda query to fetch portfolio! which will be implemented in it's controllernot here
-
-			ctx.JSON(201, map[string]any{
-				"Transaction": txn,
-				"Holding":     holding,
-			})
-			return
 		}
 
-		// Parsing previous Average stored in DB in float64
-		prevAvg, err := strconv.ParseFloat(currHoldings.AveragePrice, 64)
-		if err != nil {
-			respondWithError(ctx, 500, "error parsing current averagePrice", err)
-			return
-		}
-
-		// getting info from utils based on transaction type
-		var currQuant int
-		var currAvg, totalAmount float64
-		if req.Type == buy {
-			currQuant, _, currAvg, _, _, totalAmount = utils.HandleBuyTransaction(req.Quantity, int(currHoldings.Quantity), prevAvg, currPrice)
-		}
-		if req.Type == sell {
-			currQuant, _, currAvg, _, _, totalAmount = utils.HandleSellTransaction(req.Quantity, int(currHoldings.Quantity), prevAvg, currPrice)
-		}
-
-		// Push transaction in DB
-		totalAmountStr := strconv.FormatFloat(totalAmount, 'f', 2, 64)
+		// Insert transaction record
 		txn, err := cfg.DB.CreateATransaction(ctx, database.CreateATransactionParams{
 			UserID:      userId,
 			StockSymbol: req.StockSymbol,
 			Type:        req.Type,
 			Quantity:    int32(req.Quantity),
 			Price:       stonk.CurrentPrice,
-			TotalAmount: totalAmountStr,
+			TotalAmount: totalAmount,
 		})
 		if err != nil {
-			respondWithError(ctx, 500, "error flushing txn in DB", err)
+			respondWithError(ctx, http.StatusInternalServerError, "Failed to create transaction", err)
 			return
 		}
 
-		// If currQuant becomes zero delete the holding
-		if currQuant == 0 {
-			_, err := cfg.DB.DeleteHoldingsOnSellOut(ctx, database.DeleteHoldingsOnSellOutParams{
+		// Update or remove holding
+		if newQuantity == 0 && !isNewHolding {
+			if _, err := cfg.DB.DeleteHoldingsOnSellOut(ctx, database.DeleteHoldingsOnSellOutParams{
 				UserID:      userId,
 				StockSymbol: req.StockSymbol,
-			})
-			if err != nil {
-				respondWithError(ctx, 500, "error removing holding on SellOut", err)
+			}); err != nil {
+				respondWithError(ctx, http.StatusInternalServerError, "Failed to delete holding", err)
 				return
 			}
-			ctx.JSON(201, fmt.Sprintf("Sold Out Holdings for %s", req.StockSymbol))
+			ctx.JSON(http.StatusCreated, gin.H{"message": fmt.Sprintf("Sold out holdings for %s", req.StockSymbol)})
 			return
 		}
 
-		// Update the user's holdings based on this transaction
-		currAvgPrice := strconv.FormatFloat(currAvg, 'f', 2, 64)
-		updatedHolding, err := cfg.DB.CreateNewHoldingOrUpdateExistingForUser(ctx, database.CreateNewHoldingOrUpdateExistingForUserParams{
-			UserID:       userId,
-			StockSymbol:  txn.StockSymbol,
-			Quantity:     int32(currQuant),
-			AveragePrice: currAvgPrice,
-		})
+		updatedHolding, err := cfg.DB.CreateNewHoldingOrUpdateExistingForUser(ctx,
+			database.CreateNewHoldingOrUpdateExistingForUserParams{
+				UserID:        userId,
+				StockSymbol:   req.StockSymbol,
+				Quantity:      int32(newQuantity),
+				AveragePrice:  newAvg,
+				TotalInvested: currHolding.TotalInvested + totalAmount,
+			})
 		if err != nil {
-			respondWithError(ctx, 500, "error updating holding in DB", err)
+			respondWithError(ctx, http.StatusInternalServerError, "Failed to update holdings", err)
 			return
 		}
 
-		ctx.JSON(201, map[string]any{
+		// Respond with Transaction and Current HOlding
+		ctx.JSON(http.StatusCreated, gin.H{
 			"Transaction": txn,
 			"Holding":     updatedHolding,
 		})
 	}
 }
 
+// Helper to get stock from DB or Yahoo
+func getOrFetchStock(ctx context.Context, cfg *config.APIConfig, symbol string) (database.Stock, error) {
+	stonk, err := cfg.DB.GetStockBySymbol(ctx, symbol)
+	if err == nil {
+		return stonk, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return database.Stock{}, err
+	}
+
+	// Fetch from Yahoo if not in DB
+	var client http.Client
+	stonkFromYahoo, err := worker.FetchFromYahoo(symbol, &client)
+	if err != nil {
+		return database.Stock{}, err
+	}
+
+	return cfg.DB.CreateNewStockOrUpdateExisting(ctx, database.CreateNewStockOrUpdateExistingParams{
+		Symbol:        stonkFromYahoo.Symbol,
+		CompanyName:   stonkFromYahoo.CompanyName,
+		CurrentPrice:  stonkFromYahoo.CurrentPrice,
+		PreviousClose: stonkFromYahoo.PreviousClose,
+	})
+}
+
 func GetTransactions(cfg *config.APIConfig) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		// check for authorization header
-		token, err := auth.GetBearerToken(ctx.Request.Header)
+		// Authorization required for this route
+		userId, err := auth.GetUserID(ctx.Request.Header, cfg.JWTSecret)
 		if err != nil {
-			respondWithError(ctx, 401, "error getting token from header", err)
-			return
-		}
-
-		// get userId from token
-		userId, err := auth.ValidateJWT(token, cfg.JWTSecret)
-		if err != nil {
-			respondWithError(ctx, 401, "error validating JWT", err)
-			return
+			respondWithError(ctx, 401, "Authentication error", err)
 		}
 
 		// get transactions for userId
