@@ -1,0 +1,4 @@
+-- +goose Up
+ALTER TABLE holdings
+ADD COLUMN total_invested DOUBLE PRECISION NOT NULL
+DEFAULT 0.00;

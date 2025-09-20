@@ -31,8 +31,8 @@ type CreateATransactionParams struct {
 	StockSymbol string    `json:"stock_symbol"`
 	Type        string    `json:"type"`
 	Quantity    int32     `json:"quantity"`
-	Price       string    `json:"price"`
-	TotalAmount string    `json:"total_amount"`
+	Price       float64   `json:"price"`
+	TotalAmount float64   `json:"total_amount"`
 }
 
 func (q *Queries) CreateATransaction(ctx context.Context, arg CreateATransactionParams) (Transaction, error) {

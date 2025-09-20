@@ -5,7 +5,7 @@ CREATE TABLE holdings(
     stock_symbol TEXT REFERENCES stocks(symbol) ON DELETE CASCADE NOT NULL,
     UNIQUE (user_id, stock_symbol),
     quantity INTEGER NOT NULL CHECK (quantity > 0),
-    average_price DECIMAL(10, 2) NOT NULL,
+    average_price DOUBLE PRECISION NOT NULL,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL
 );

@@ -12,7 +12,7 @@ import (
 )
 
 const createNewHoldingOrUpdateExistingForUser = `-- name: CreateNewHoldingOrUpdateExistingForUser :one
-INSERT INTO holdings(id, user_id, stock_symbol, quantity, average_price, created_at, updated_at)
+INSERT INTO holdings(id, user_id, stock_symbol, quantity, average_price, created_at, updated_at, total_invested)
 VALUES (
     gen_random_uuid(),
     $1,  
@@ -20,21 +20,24 @@ VALUES (
     $3,  
     $4,  
     NOW(),
-    NOW()
+    NOW(),
+    $5
 )
 ON CONFLICT (user_id, stock_symbol) DO UPDATE
 SET 
     quantity      = EXCLUDED.quantity,
     average_price = EXCLUDED.average_price,
-    updated_at    = NOW()
-RETURNING id, user_id, stock_symbol, quantity, average_price, created_at, updated_at
+    updated_at    = NOW(),
+    total_invested = EXCLUDED.total_invested
+RETURNING id, user_id, stock_symbol, quantity, average_price, created_at, updated_at, total_invested
 `
 
 type CreateNewHoldingOrUpdateExistingForUserParams struct {
-	UserID       uuid.UUID `json:"user_id"`
-	StockSymbol  string    `json:"stock_symbol"`
-	Quantity     int32     `json:"quantity"`
-	AveragePrice string    `json:"average_price"`
+	UserID        uuid.UUID `json:"user_id"`
+	StockSymbol   string    `json:"stock_symbol"`
+	Quantity      int32     `json:"quantity"`
+	AveragePrice  float64   `json:"average_price"`
+	TotalInvested float64   `json:"total_invested"`
 }
 
 func (q *Queries) CreateNewHoldingOrUpdateExistingForUser(ctx context.Context, arg CreateNewHoldingOrUpdateExistingForUserParams) (Holding, error) {
@@ -43,6 +46,7 @@ func (q *Queries) CreateNewHoldingOrUpdateExistingForUser(ctx context.Context, a
 		arg.StockSymbol,
 		arg.Quantity,
 		arg.AveragePrice,
+		arg.TotalInvested,
 	)
 	var i Holding
 	err := row.Scan(
@@ -53,6 +57,7 @@ func (q *Queries) CreateNewHoldingOrUpdateExistingForUser(ctx context.Context, a
 		&i.AveragePrice,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TotalInvested,
 	)
 	return i, err
 }
@@ -81,7 +86,8 @@ SELECT
     stocks.company_name AS company_name,
     holdings.quantity AS quantity,
     holdings.average_price AS average_price,
-    stocks.current_price AS current_price
+    stocks.current_price AS current_price,
+    holdings.total_invested AS total_invested
 FROM holdings
 JOIN stocks
 ON holdings.stock_symbol = stocks.symbol
@@ -89,11 +95,12 @@ WHERE holdings.user_id = $1
 `
 
 type GetAllHoldingsForUserRow struct {
-	StockSymbol  string `json:"stock_symbol"`
-	CompanyName  string `json:"company_name"`
-	Quantity     int32  `json:"quantity"`
-	AveragePrice string `json:"average_price"`
-	CurrentPrice string `json:"current_price"`
+	StockSymbol   string  `json:"stock_symbol"`
+	CompanyName   string  `json:"company_name"`
+	Quantity      int32   `json:"quantity"`
+	AveragePrice  float64 `json:"average_price"`
+	CurrentPrice  float64 `json:"current_price"`
+	TotalInvested float64 `json:"total_invested"`
 }
 
 func (q *Queries) GetAllHoldingsForUser(ctx context.Context, userID uuid.UUID) ([]GetAllHoldingsForUserRow, error) {
@@ -111,6 +118,7 @@ func (q *Queries) GetAllHoldingsForUser(ctx context.Context, userID uuid.UUID) (
 			&i.Quantity,
 			&i.AveragePrice,
 			&i.CurrentPrice,
+			&i.TotalInvested,
 		); err != nil {
 			return nil, err
 		}
@@ -126,7 +134,7 @@ func (q *Queries) GetAllHoldingsForUser(ctx context.Context, userID uuid.UUID) (
 }
 
 const getHoldingByStockSymbol = `-- name: GetHoldingByStockSymbol :one
-SELECT id, user_id, stock_symbol, quantity, average_price, created_at, updated_at FROM holdings
+SELECT id, user_id, stock_symbol, quantity, average_price, created_at, updated_at, total_invested FROM holdings
 WHERE user_id = $1 AND stock_symbol = $2
 `
 
@@ -146,6 +154,7 @@ func (q *Queries) GetHoldingByStockSymbol(ctx context.Context, arg GetHoldingByS
 		&i.AveragePrice,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.TotalInvested,
 	)
 	return i, err
 }

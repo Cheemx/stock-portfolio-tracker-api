@@ -13,8 +13,8 @@ import (
 
 const getPortfolioForUser = `-- name: GetPortfolioForUser :one
 SELECT 
-        SUM(holdings.quantity * holdings.average_price) AS total_invested,
-        SUM(holdings.quantity * stocks.current_price) AS current_value,
+        SUM(holdings.total_invested)::DOUBLE PRECISION AS total_invested,
+        SUM(holdings.quantity * stocks.current_price)::DOUBLE PRECISION AS current_value,
         COUNT(holdings.user_id) AS holdings_count
 FROM holdings 
 JOIN users
@@ -26,9 +26,9 @@ GROUP BY holdings.user_id
 `
 
 type GetPortfolioForUserRow struct {
-	TotalInvested int64 `json:"total_invested"`
-	CurrentValue  int64 `json:"current_value"`
-	HoldingsCount int64 `json:"holdings_count"`
+	TotalInvested float64 `json:"total_invested"`
+	CurrentValue  float64 `json:"current_value"`
+	HoldingsCount int64   `json:"holdings_count"`
 }
 
 func (q *Queries) GetPortfolioForUser(ctx context.Context, id uuid.UUID) (GetPortfolioForUserRow, error) {

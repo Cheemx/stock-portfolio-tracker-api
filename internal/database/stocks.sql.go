@@ -29,10 +29,10 @@ RETURNING symbol, company_name, current_price, previous_close, updated_at
 `
 
 type CreateNewStockOrUpdateExistingParams struct {
-	Symbol        string         `json:"symbol"`
-	CompanyName   string         `json:"company_name"`
-	CurrentPrice  string         `json:"current_price"`
-	PreviousClose sql.NullString `json:"previous_close"`
+	Symbol        string          `json:"symbol"`
+	CompanyName   string          `json:"company_name"`
+	CurrentPrice  float64         `json:"current_price"`
+	PreviousClose sql.NullFloat64 `json:"previous_close"`
 }
 
 func (q *Queries) CreateNewStockOrUpdateExisting(ctx context.Context, arg CreateNewStockOrUpdateExistingParams) (Stock, error) {
@@ -150,9 +150,9 @@ RETURNING symbol, company_name, current_price, previous_close, updated_at
 `
 
 type UpdateStockPriceParams struct {
-	CurrentPrice  string         `json:"current_price"`
-	PreviousClose sql.NullString `json:"previous_close"`
-	Symbol        string         `json:"symbol"`
+	CurrentPrice  float64         `json:"current_price"`
+	PreviousClose sql.NullFloat64 `json:"previous_close"`
+	Symbol        string          `json:"symbol"`
 }
 
 func (q *Queries) UpdateStockPrice(ctx context.Context, arg UpdateStockPriceParams) (Stock, error) {
