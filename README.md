@@ -1,7 +1,7 @@
 # Stock Portfolio Tracker API
 
 A stock tracking and portfolio management API built with **Golang**, **PostgreSQL**, **Redis**, and **Docker**.
-The project focuses on clean modular code, DRY principles, and efficient backend SQL queries while exploring background workers, authentication, and scalable API design.
+The project focuses on clean modular code, DRY principles, and efficient backend SQL queries while exploring **background workers** using **Redis Streams** (kind of Message queue), authentication, and scalable API design.
 
 ---
 
@@ -88,6 +88,11 @@ I'd prefer using Docker personally and copy the env variables from `.env.sample`
 ### Transaction History
 
 * **GET /api/transactions** – Retrieve all user transactions
+
+### Stocks
+
+* **GET /api/stocks/search?q=apple** - Search for a stock by stock symbol or company name
+* **GET /api/stocks** - Fetch recent 10 stocks
 
 ### Background Worker
 
@@ -224,6 +229,24 @@ I'd prefer using Docker personally and copy the env variables from `.env.sample`
     }
 ]
 ```
+---
+
+### Search and Get Stocks
+
+**Response**
+
+```json
+[
+    {
+        "symbol": "MSFT",
+        "company_name": "Microsoft Corporation",
+        "current_price": 517.93,
+        "previous_close": 415.00,
+        "updated_at": "2025-09-20T13:38:18.667612Z"
+    },
+    // ...
+]
+```
 
 ---
 
@@ -247,12 +270,8 @@ I'd prefer using Docker personally and copy the env variables from `.env.sample`
 
 ---
 
-## Planned Improvements
+## Planned Improvements Improving Infrastructure.
 
-* `/api/search?query` – Search for stocks
-* `/api/stocks` – Fetch 10–15 random stocks
 * Rate limiter for API security
 * Nginx for load balancing
 * WebSocket support for live price updates
-
----

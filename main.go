@@ -33,6 +33,7 @@ func main() {
 	routes.TransactionRoutes(r, cfg)
 	routes.HoldingRoutes(r, cfg)
 	routes.PortfolioRoutes(r, cfg)
+	routes.StockRoutes(r, cfg)
 	log.Printf("Serving Stock tracker API on port: %s\n", port)
 	log.Fatal(r.Run(":" + port))
 }

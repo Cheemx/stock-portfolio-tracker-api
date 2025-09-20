@@ -55,6 +55,8 @@ func (q *Queries) CreateNewStockOrUpdateExisting(ctx context.Context, arg Create
 
 const getAllStocks = `-- name: GetAllStocks :many
 SELECT symbol, company_name, current_price, previous_close, updated_at FROM stocks
+ORDER BY updated_at DESC
+LIMIT 10
 `
 
 func (q *Queries) GetAllStocks(ctx context.Context) ([]Stock, error) {

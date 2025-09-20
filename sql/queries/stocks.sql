@@ -34,4 +34,6 @@ FROM stocks
 WHERE company_name ILIKE '%' || $1 || '%';
 
 -- name: GetAllStocks :many
-SELECT * FROM stocks;
+SELECT * FROM stocks
+ORDER BY updated_at DESC
+LIMIT 10;
