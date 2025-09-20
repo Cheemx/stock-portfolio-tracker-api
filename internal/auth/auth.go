@@ -55,3 +55,15 @@ func GetBearerToken(headers http.Header) (string, error) {
 	}
 	return strings.TrimPrefix(authHeader, "Bearer "), nil
 }
+
+func GetUserID(headers http.Header, tokenSecret string) (uuid.UUID, error) {
+	tokenStr, err := GetBearerToken(headers)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+	userId, err := ValidateJWT(tokenStr, tokenSecret)
+	if err != nil {
+		return uuid.UUID{}, err
+	}
+	return userId, nil
+}
