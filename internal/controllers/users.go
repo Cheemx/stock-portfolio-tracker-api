@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"log"
+	"net/http"
 	"os"
 	"time"
 
@@ -14,6 +15,13 @@ import (
 
 func CreateUser(cfg *config.APIConfig) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		// Applying rate limit on signup route
+		if !cfg.CheckRateLimit(ctx, ctx.ClientIP(), "signup") {
+			respondWithError(ctx, http.StatusTooManyRequests, "Sign-Up Quota Expired", nil)
+			return
+		}
+
+		// request handling
 		req := struct {
 			Name     string `json:"name"`
 			Email    string `json:"email"`
@@ -64,6 +72,12 @@ func CreateUser(cfg *config.APIConfig) gin.HandlerFunc {
 
 func LoginUser(cfg *config.APIConfig) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		// Applying rate limit on signup route
+		if !cfg.CheckRateLimit(ctx, ctx.ClientIP(), "login") {
+			respondWithError(ctx, http.StatusTooManyRequests, "Sign-Up Quota Expired", nil)
+			return
+		}
+
 		// request parsing
 		req := struct {
 			Email    string `json:"email"`

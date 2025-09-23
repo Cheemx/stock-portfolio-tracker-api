@@ -24,8 +24,8 @@ func Stocker(cfg *config.APIConfig) {
 		log.Printf("Error getting symbols from DB: %v\n", err)
 	}
 
-	if len(symbols) < 1 {
-		log.Println("Niga first buy some stonks to hold them")
+	if len(symbols) < 5 {
+		symbols = append(symbols, []string{"RELIANCE", "AAPL", "MSFT", "TCS", "HDFCBANK", "NIFTY50"}...)
 	}
 
 	thirtySecTicker := time.NewTicker(30 * time.Second)

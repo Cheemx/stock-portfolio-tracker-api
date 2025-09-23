@@ -109,7 +109,7 @@ func (q *Queries) GetStockBySymbol(ctx context.Context, symbol string) (Stock, e
 const searchStockByName = `-- name: SearchStockByName :many
 SELECT symbol, company_name, current_price, previous_close, updated_at
 FROM stocks
-WHERE company_name ILIKE '%' || $1 || '%'
+WHERE company_name ILIKE '%' || $1 || '%' OR symbol ILIKE '%' || $1 || '%'
 `
 
 func (q *Queries) SearchStockByName(ctx context.Context, dollar_1 sql.NullString) ([]Stock, error) {

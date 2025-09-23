@@ -9,3 +9,7 @@ migrationDown:
 # To connect to stonk db in CLI
 databaseDikha: 
 	docker exec -it stock-portfolio-tracker-api-postgres-1 psql -U postgres -d stonk
+
+# To connect with redis terminal in CLI 
+redisDikha:
+	docker exec -it stock-portfolio-tracker-api-redis-1 redis-cli

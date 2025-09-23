@@ -31,7 +31,7 @@ RETURNING *;
 -- name: SearchStockByName :many
 SELECT *
 FROM stocks
-WHERE company_name ILIKE '%' || $1 || '%';
+WHERE company_name ILIKE '%' || $1 || '%' OR symbol ILIKE '%' || $1 || '%';
 
 -- name: GetAllStocks :many
 SELECT * FROM stocks

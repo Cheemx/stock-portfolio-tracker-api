@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -11,17 +10,17 @@ import (
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/config"
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/database"
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/utils"
-	"github.com/Cheemx/stock-portfolio-tacker-api/internal/worker"
 	"github.com/gin-gonic/gin"
-)
-
-const (
-	buy  = "BUY"
-	sell = "SELL"
 )
 
 func CreateTransaction(cfg *config.APIConfig) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		// Applying rate limiter to limit transactions
+		if !cfg.CheckRateLimit(ctx, ctx.ClientIP(), "transactions") {
+			respondWithError(ctx, http.StatusTooManyRequests, "Wait for some time!", nil)
+			return
+		}
+
 		// Authenticated route niga!
 		userId, err := auth.GetUserID(ctx.Request.Header, cfg.JWTSecret)
 		if err != nil {
@@ -137,33 +136,14 @@ func CreateTransaction(cfg *config.APIConfig) gin.HandlerFunc {
 	}
 }
 
-// Helper to get stock from DB or Yahoo
-func getOrFetchStock(ctx context.Context, cfg *config.APIConfig, symbol string) (database.Stock, error) {
-	stonk, err := cfg.DB.GetStockBySymbol(ctx, symbol)
-	if err == nil {
-		return stonk, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return database.Stock{}, err
-	}
-
-	// Fetch from Yahoo if not in DB
-	var client http.Client
-	stonkFromYahoo, err := worker.FetchFromYahoo(symbol, &client)
-	if err != nil {
-		return database.Stock{}, err
-	}
-
-	return cfg.DB.CreateNewStockOrUpdateExisting(ctx, database.CreateNewStockOrUpdateExistingParams{
-		Symbol:        stonkFromYahoo.Symbol,
-		CompanyName:   stonkFromYahoo.CompanyName,
-		CurrentPrice:  stonkFromYahoo.CurrentPrice,
-		PreviousClose: stonkFromYahoo.PreviousClose,
-	})
-}
-
 func GetTransactions(cfg *config.APIConfig) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		// Applying rate limiter to limit transactions
+		if !cfg.CheckRateLimit(ctx, ctx.ClientIP(), "login") {
+			respondWithError(ctx, http.StatusTooManyRequests, "Wait for some time!", nil)
+			return
+		}
+
 		// Authorization required for this route
 		userId, err := auth.GetUserID(ctx.Request.Header, cfg.JWTSecret)
 		if err != nil {
