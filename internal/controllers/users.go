@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/auth"
@@ -48,6 +49,10 @@ func CreateUser(cfg *config.APIConfig) gin.HandlerFunc {
 			HashedPassword: hashedPass,
 		})
 		if err != nil {
+			if strings.Contains(err.Error(), "duplicate key value violates unique constraint \"users_email_key\"") {
+				respondWithError(ctx, 401, "User already exists", err)
+				return
+			}
 			respondWithError(ctx, 500, "error creating user", err)
 			return
 		}

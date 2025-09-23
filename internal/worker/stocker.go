@@ -25,7 +25,7 @@ func Stocker(cfg *config.APIConfig) {
 	}
 
 	if len(symbols) < 5 {
-		symbols = append(symbols, []string{"RELIANCE", "AAPL", "MSFT", "TCS", "HDFCBANK", "NIFTY50"}...)
+		symbols = append(symbols, []string{"AAPL", "MSFT", "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "^NSEI"}...)
 	}
 
 	thirtySecTicker := time.NewTicker(30 * time.Second)
