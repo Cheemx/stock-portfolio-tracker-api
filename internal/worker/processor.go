@@ -37,6 +37,13 @@ func ProcessStocks(cfg *config.APIConfig) {
 					continue
 				}
 
+				// setting stock data in cache!
+				err = cfg.RD.Set(context.Background(), "stock:"+stockRes.Symbol, stockJSON, 30*time.Second).Err()
+				if err != nil {
+					log.Printf("Error setting stock in cache: %v\n", err)
+					continue
+				}
+
 				// store in Postgres DB
 				_, err = cfg.DB.CreateNewStockOrUpdateExisting(context.Background(), database.CreateNewStockOrUpdateExistingParams{
 					Symbol:        stockRes.Symbol,

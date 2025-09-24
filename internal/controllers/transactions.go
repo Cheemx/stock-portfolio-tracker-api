@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/auth"
@@ -126,6 +128,12 @@ func CreateTransaction(cfg *config.APIConfig) gin.HandlerFunc {
 		if err != nil {
 			respondWithError(ctx, http.StatusInternalServerError, "Failed to update holdings", err)
 			return
+		}
+
+		// Portfolio Cache Invalidation!
+		// Since transaction is successful let's delete current portfolio cache
+		if err := cfg.RD.Del(context.Background(), "portfolio:"+userId.String()).Err(); err != nil {
+			log.Printf("Error deleting portfolio for user %v: %v\n", userId, err)
 		}
 
 		// Respond with Transaction and Current HOlding
