@@ -159,6 +159,34 @@ func (q *Queries) GetHoldingByStockSymbol(ctx context.Context, arg GetHoldingByS
 	return i, err
 }
 
+const getStockSymbolsForUser = `-- name: GetStockSymbolsForUser :many
+SELECT stock_symbol FROM holdings
+WHERE user_id = $1
+`
+
+func (q *Queries) GetStockSymbolsForUser(ctx context.Context, userID uuid.UUID) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getStockSymbolsForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var stock_symbol string
+		if err := rows.Scan(&stock_symbol); err != nil {
+			return nil, err
+		}
+		items = append(items, stock_symbol)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getStockSymbolsOfHoldings = `-- name: GetStockSymbolsOfHoldings :many
 SELECT DISTINCT stock_symbol
 FROM holdings

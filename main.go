@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/config"
+	"github.com/Cheemx/stock-portfolio-tacker-api/internal/controllers"
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/routes"
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/worker"
 	"github.com/gin-gonic/gin"
@@ -28,12 +29,14 @@ func main() {
 		worker.Stocker(cfg)
 	}()
 	go worker.ProcessStocks(cfg)
+	go controllers.RunHub()
 
 	routes.UserRoutes(r, cfg)
 	routes.TransactionRoutes(r, cfg)
 	routes.HoldingRoutes(r, cfg)
 	routes.PortfolioRoutes(r, cfg)
 	routes.StockRoutes(r, cfg)
+	routes.WsRoutes(r, cfg)
 	log.Printf("Serving Stock tracker API on port: %s\n", port)
 	log.Fatal(r.Run(":" + port))
 }

@@ -3,18 +3,14 @@ package worker
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/config"
-	"github.com/Cheemx/stock-portfolio-tacker-api/internal/database"
+	"github.com/Cheemx/stock-portfolio-tacker-api/internal/controllers"
 	"github.com/redis/go-redis/v9"
 )
-
-const YahooAPI = "https://query1.finance.yahoo.com/v8/finance/chart/"
 
 func Stocker(cfg *config.APIConfig) {
 	// DB call to get all symbol for current user
@@ -42,13 +38,16 @@ func Stocker(cfg *config.APIConfig) {
 		if hour < 9 || hour > 16 {
 			continue
 		}
-		client := &http.Client{}
+		client := &http.Client{Timeout: 5 * time.Second}
 		for _, symbol := range symbols {
-			stockRes, err := FetchFromYahoo(symbol, client)
+			// Fetching stock from Yahoo API
+			stockRes, err := controllers.FetchFromYahoo(symbol, client)
 			if err != nil {
 				log.Printf("error fetching from YahooAPI: %v\n", err)
 				continue
 			}
+
+			// Pushing stockJSON ([]byte) in redis Stream
 			stockJSON, _ := json.Marshal(stockRes)
 			err = cfg.RD.XAdd(context.Background(), &redis.XAddArgs{
 				Stream: "events:liveStocks",
@@ -56,42 +55,18 @@ func Stocker(cfg *config.APIConfig) {
 				MaxLen: 100,
 				Approx: true,
 			}).Err()
-
 			if err != nil {
 				log.Printf("error adding stock in redis pipeline: %v\n", err)
 				continue
 			}
+
+			// Put that stockJSON ([]byte) on the broadcast channel of websocket
+			// Since channels are inherently Thread-Safe I think this will work as expected and also its on-blocking send.
+			select {
+			case controllers.Broadcast <- stockJSON:
+			default:
+				log.Println("No StockJSON sent on Broadcast")
+			}
 		}
 	}
-}
-
-func FetchFromYahoo(symbol string, client *http.Client) (database.Stock, error) {
-	var resp config.YahooFinanceResponse
-	reqToStockAPI, err := http.NewRequest("GET", YahooAPI+symbol, nil)
-	if err != nil {
-		return database.Stock{}, err
-	}
-
-	// Adding headers to avoid 429 from YahooAPI
-	reqToStockAPI.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
-	reqToStockAPI.Header.Set("Accept", "application/json")
-
-	yahooRes, err := client.Do(reqToStockAPI)
-	if err != nil {
-		return database.Stock{}, err
-	}
-	defer yahooRes.Body.Close()
-	if yahooRes.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(yahooRes.Body)
-		return database.Stock{}, fmt.Errorf("yahoo api error: %s - %s", yahooRes.Status, string(body))
-	}
-	if err := json.NewDecoder(yahooRes.Body).Decode(&resp); err != nil {
-		return database.Stock{}, err
-	}
-
-	if len(resp.Chart.Result) == 0 {
-		return database.Stock{}, fmt.Errorf("no results in Yahoo response")
-	}
-	yahooResult := resp.Chart.Result[0]
-	return yahooResult.ToStock(), nil
 }

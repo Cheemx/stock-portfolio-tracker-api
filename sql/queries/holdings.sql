@@ -42,3 +42,7 @@ WHERE user_id = $1 AND stock_symbol = $2;
 -- name: GetStockSymbolsOfHoldings :many
 SELECT DISTINCT stock_symbol
 FROM holdings;
+
+-- name: GetStockSymbolsForUser :many
+SELECT stock_symbol FROM holdings
+WHERE user_id = $1;
