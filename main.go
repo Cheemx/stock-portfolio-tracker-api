@@ -2,11 +2,13 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/config"
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/controllers"
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/routes"
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/worker"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 )
@@ -19,6 +21,19 @@ func main() {
 	gin.SetMode(gin.DebugMode)
 
 	cfg := config.Load()
+
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{"message": "Backend is working!"})
+	})
+
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000", "https://cheems-writes.vercel.app"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		ExposeHeaders:    []string{"Content-Length", "Access-Control-Allow-Origin"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	go func() {
 		defer func() {
