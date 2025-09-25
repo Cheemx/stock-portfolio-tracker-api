@@ -1,11 +1,15 @@
 package controllers
 
 import (
+	"encoding/json"
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/auth"
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/config"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 )
 
 func Holdings(cfg *config.APIConfig) gin.HandlerFunc {
@@ -22,13 +26,6 @@ func Holdings(cfg *config.APIConfig) gin.HandlerFunc {
 			respondWithError(ctx, 401, "Authentication error", err)
 		}
 
-		// Get holdings from user
-		holdings, err := cfg.DB.GetAllHoldingsForUser(ctx, userId)
-		if err != nil {
-			respondWithError(ctx, 500, "holdings not found for this user", err)
-			return
-		}
-
 		// Draft response struct with pnl and pnlPercentage
 		type holdingRes struct {
 			StockSymbol            string  `json:"stock_symbol"`
@@ -41,9 +38,28 @@ func Holdings(cfg *config.APIConfig) gin.HandlerFunc {
 			ProfitOrLossPercentage float64 `json:"pnl_percentage"`
 			TotalInvested          float64 `json:"total_invested"`
 		}
-		var res []holdingRes
+
+		// Get the holdings from cache if present OR not expired
+		var holdingsRes []holdingRes
+		holdingsBytes, err := cfg.RD.Get(ctx, "holdings:"+userId.String()).Result()
+		if err == nil {
+			if err := json.Unmarshal([]byte(holdingsBytes), &holdingsRes); err == nil {
+				ctx.JSON(200, holdingsRes)
+				return
+			}
+		} else if err != redis.Nil {
+			log.Printf("Redis GET error: %v\n", err)
+		}
+
+		// Get holdings from user
+		holdings, err := cfg.DB.GetAllHoldingsForUser(ctx, userId)
+		if err != nil {
+			respondWithError(ctx, 500, "holdings not found for this user", err)
+			return
+		}
 
 		// calculate pnl and pnlpercentage for each holding and store in res
+		var res []holdingRes
 		for _, holding := range holdings {
 			currValue := float64(holding.Quantity) * holding.CurrentPrice
 			pnl := currValue - holding.TotalInvested
@@ -62,6 +78,20 @@ func Holdings(cfg *config.APIConfig) gin.HandlerFunc {
 
 			res = append(res, hold)
 		}
+
+		// Set the holdings in Cache for faster lookup
+		// This cache holdings will be deleted in the transactions.go whenever
+		// A new transaction is successful
+		resJSON, err := json.Marshal(res)
+		if err != nil {
+			log.Printf("Error marshalling holdings cache: %v\n", err)
+		}
+
+		err = cfg.RD.Set(ctx, "holdings:"+userId.String(), resJSON, 5*time.Minute).Err()
+		if err != nil {
+			log.Printf("Error setting holdings cache: %v\n", err)
+		}
+
 		// return holdings
 		ctx.JSON(200, res)
 	}

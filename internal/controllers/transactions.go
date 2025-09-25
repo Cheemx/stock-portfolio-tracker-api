@@ -113,6 +113,18 @@ func CreateTransaction(cfg *config.APIConfig) gin.HandlerFunc {
 				respondWithError(ctx, http.StatusInternalServerError, "Failed to delete holding", err)
 				return
 			}
+
+			// Since transaction is successful let's delete current portfolio cache
+			if err := cfg.RD.Del(context.Background(), "portfolio:"+userId.String()).Err(); err != nil {
+				log.Printf("Error deleting portfolio cache for user %v: %v\n", userId, err)
+			}
+
+			// Also let's remove the holdings cache too!
+			if err := cfg.RD.Del(context.Background(), "holdings:"+userId.String()).Err(); err != nil {
+				log.Printf("Error deleting holdings cache for user %v: %v\n", userId, err)
+			}
+
+			// return the sold out message
 			ctx.JSON(http.StatusCreated, gin.H{"message": fmt.Sprintf("Sold out holdings for %s", req.StockSymbol)})
 			return
 		}
@@ -130,10 +142,15 @@ func CreateTransaction(cfg *config.APIConfig) gin.HandlerFunc {
 			return
 		}
 
-		// Portfolio Cache Invalidation!
+		// Cache Invalidation!
 		// Since transaction is successful let's delete current portfolio cache
 		if err := cfg.RD.Del(context.Background(), "portfolio:"+userId.String()).Err(); err != nil {
 			log.Printf("Error deleting portfolio for user %v: %v\n", userId, err)
+		}
+
+		// Also let's remove the holdings cache too!
+		if err := cfg.RD.Del(context.Background(), "holdings:"+userId.String()).Err(); err != nil {
+			log.Printf("Error deleting holdings cache for user %v: %v\n", userId, err)
 		}
 
 		// Respond with Transaction and Current HOlding

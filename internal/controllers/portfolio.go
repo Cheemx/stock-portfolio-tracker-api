@@ -76,13 +76,13 @@ func Portfolio(cfg *config.APIConfig) gin.HandlerFunc {
 		}
 		resJSON, err := json.Marshal(res)
 		if err != nil {
-			log.Printf("Error marshalling portfolio cache: %v\n", res)
+			log.Printf("Error marshalling portfolio cache: %v\n", err)
 		}
 
 		// Set the portfolio Result in json
 		err = cfg.RD.Set(ctx, "portfolio:"+userId.String(), resJSON, 5*time.Minute).Err()
 		if err != nil {
-			log.Printf("Error setting portfolio cache: %v\n", res)
+			log.Printf("Error setting portfolio cache: %v\n", err)
 		}
 
 		ctx.JSON(200, res)
