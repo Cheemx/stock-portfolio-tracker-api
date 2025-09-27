@@ -5,12 +5,17 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-336791?style=flat&logo=postgresql)](https://postgresql.org/)
 [![Redis](https://img.shields.io/badge/Redis-Cache-DC382D?style=flat&logo=redis)](https://redis.io/)
 
+## Update
+After carefully reconsidering the WebSocket implementation, it was overkill since there was no bidirectional messaging requirement. Following a friend's suggestion, re-engineered the real-time communication with **Server Sent Events (SSE)**.
+
+Now it runs on `/api/events` and continuously serves stock data that the user actually holds. If the user holds no stocks, nothing will be served to them making it more efficient and purposeful.
+
 ## Key Features
 
 A RESTful API built with **Go** that provides real-time stock portfolio tracking with advanced features including WebSocket connections, Redis caching, rate limiting, and background processing.
 
 - **Real-time Stock Data Integration** - Live market data via Yahoo Finance API
-- **WebSocket Broadcasting** - Real-time portfolio updates to connected clients
+- **Server Sent Events (SSE)** - Real-time portfolio updates to connected clients
 - **Caching Strategy** - Redis caching with Configured TTL management and Invalidations
 - **Rate Limiting** - Sophisticated request throttling with action-based limits
 - **Background Processing** - Asynchronous data fetching and processing
@@ -22,7 +27,7 @@ A RESTful API built with **Go** that provides real-time stock portfolio tracking
 ### Tech Stack
 - **Backend**: Go 1.25 with gin-gonic
 - **Database**: PostgreSQL with Migration management
-- **Message Broker**: Redis Streams and Websocket for real-time communication
+- **Message Broker**: Redis Streams and SSE for (almost) real-time communication
 - **Containerization**: Docker and Docker Compose
 - **Authentication**: JWT tokens for Authorization
 - **API Integration**: Yahoo Finance for market data
@@ -266,14 +271,34 @@ GET /api/stocks/search?q=apple
 
 ### Real-time Updates
 
-#### WebSocket Connection
-Will continuously provide with user-holding stocks JSON ([]byte format) 
+#### Server Sent Events (SSE)
+Continuously provides real-time stock updates for user's holdings in JSON format.
+
 ```http
-GET ws://localhost:8080/ws
+GET /api/events
 Authorization: Bearer <JWT_TOKEN>
+Accept: text/event-stream
 ```
+
+**JavaScript Client Example:**
 ```javascript
-const ws = new WebSocket('ws://localhost:8080/ws');
+const eventSource = new EventSource('/api/events', {
+    headers: {
+        'Authorization': 'Bearer ' + token
+    }
+});
+
+eventSource.onmessage = function(event) {
+    const stockData = JSON.parse(event.data);
+    console.log('Real-time stock update:', stockData);
+};
+```
+
+**Event Stream Response Format:**
+```
+data: {"symbol":"AAPL","company_name":"Apple Inc.","current_price":255.7,"previous_close":256.08,"updated_at":"2025-09-23T16:35:36Z"}
+
+data: {"symbol":"MSFT","company_name":"Microsoft Corporation","current_price":517.93,"previous_close":520.15,"updated_at":"2025-09-23T16:35:40Z"}
 ```
 
 ## Security & Performance
@@ -286,8 +311,14 @@ const ws = new WebSocket('ws://localhost:8080/ws');
 
 ### Caching Strategy
 - **Stock Prices**: 30-second TTL with automatic refresh
-- **Portfolio Data**: 5-minute TTL with transaction-based invalidation
 - **User Sessions**: JWT token validation with 1 hour expiry time
+
+### Architecture Flow
+```
+Yahoo API → Stocker (Background Worker) → Redis Streams → Processor → PostgreSQL
+                                                              ↓
+User Holdings ← SSE Stream ← /api/events ← User's Stock Symbols
+```
 
 ### Conclusion
 *If you've read it till this end, consider giving a star!*
