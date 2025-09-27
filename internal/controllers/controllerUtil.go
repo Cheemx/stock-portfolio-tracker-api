@@ -13,6 +13,7 @@ import (
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/config"
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/database"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 const (
@@ -106,4 +107,79 @@ func FetchFromYahoo(symbol string, client *http.Client) (database.Stock, error) 
 	}
 	yahooResult := resp.Chart.Result[0]
 	return yahooResult.ToStock(), nil
+}
+
+type holdingRes struct {
+	StockSymbol            string  `json:"stock_symbol"`
+	CompanyName            string  `json:"company_name"`
+	Quantity               int     `json:"quantity"`
+	AveragePrice           float64 `json:"average_price"`
+	CurrentPrice           float64 `json:"curr_price"`
+	CurrentValue           float64 `json:"curr_evaluation"`
+	ProfitOrLoss           float64 `json:"pnl"`
+	ProfitOrLossPercentage float64 `json:"pnl_percentage"`
+	TotalInvested          float64 `json:"total_invested"`
+}
+
+func GetHoldings(ctx *gin.Context, cfg *config.APIConfig, userId uuid.UUID) ([]holdingRes, error) {
+	// Get holdings from user
+	holdings, err := cfg.DB.GetAllHoldingsForUser(ctx, userId)
+	if err != nil {
+		return nil, err
+	}
+
+	// calculate pnl and pnlpercentage for each holding and store in res
+	var res []holdingRes
+	for _, holding := range holdings {
+		currValue := float64(holding.Quantity) * holding.CurrentPrice
+		pnl := currValue - holding.TotalInvested
+		pnlPercentage := (pnl / holding.TotalInvested) * 100
+		hold := holdingRes{
+			StockSymbol:            holding.StockSymbol,
+			CompanyName:            holding.CompanyName,
+			Quantity:               int(holding.Quantity),
+			AveragePrice:           holding.AveragePrice,
+			CurrentPrice:           holding.CurrentPrice,
+			CurrentValue:           currValue,
+			ProfitOrLoss:           pnl,
+			ProfitOrLossPercentage: pnlPercentage,
+			TotalInvested:          holding.TotalInvested,
+		}
+
+		res = append(res, hold)
+	}
+	return res, nil
+}
+
+type PortfolioRes struct {
+	TotalInvested     float64 `json:"total_invested"`
+	CurrentValue      float64 `json:"current_value"`
+	TotalProfitOrLoss float64 `json:"pnl"`
+	PNLPercentage     float64 `json:"pnl_percentage"`
+	HoldingsCount     int     `json:"holdings_count"`
+}
+
+func GetPortfolio(ctx *gin.Context, cfg *config.APIConfig, userId uuid.UUID) (PortfolioRes, error) {
+	// get the portfolio for the user
+	portfolio, err := cfg.DB.GetPortfolioForUser(ctx, userId)
+	if err != nil {
+		return PortfolioRes{}, err
+	}
+
+	// Add the pnl and pnlpercentage
+	pnlPercentage := 0.0
+	pnl := portfolio.CurrentValue - portfolio.TotalInvested
+	if portfolio.TotalInvested > 0 {
+		pnlPercentage = (pnl / portfolio.TotalInvested) * 100
+	}
+
+	// respond with the portfolio
+	res := PortfolioRes{
+		TotalInvested:     portfolio.TotalInvested,
+		CurrentValue:      portfolio.CurrentValue,
+		TotalProfitOrLoss: pnl,
+		PNLPercentage:     pnlPercentage,
+		HoldingsCount:     int(portfolio.HoldingsCount),
+	}
+	return res, nil
 }

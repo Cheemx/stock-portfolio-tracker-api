@@ -59,14 +59,6 @@ func Stocker(cfg *config.APIConfig) {
 				log.Printf("error adding stock in redis pipeline: %v\n", err)
 				continue
 			}
-
-			// Put that stockJSON ([]byte) on the broadcast channel of websocket
-			// Since channels are inherently Thread-Safe I think this will work as expected and also its on-blocking send.
-			select {
-			case controllers.Broadcast <- stockJSON:
-			default:
-				log.Println("No StockJSON sent on Broadcast")
-			}
 		}
 	}
 }
