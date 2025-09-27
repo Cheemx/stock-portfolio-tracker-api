@@ -8,6 +8,7 @@ import (
 
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/config"
 	"github.com/Cheemx/stock-portfolio-tacker-api/internal/database"
+	"github.com/Cheemx/stock-portfolio-tacker-api/internal/events"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -55,6 +56,14 @@ func ProcessStocks(cfg *config.APIConfig) {
 				if err != nil {
 					log.Printf("DB insert error: %v\n", err)
 					continue
+				}
+
+				// Put that stockJSON ([]byte) on the broadcast channel of websocket
+				// Since channels are inherently Thread-Safe I think this will work as expected and also its on-blocking send.
+				select {
+				case events.HubInstance.Broadcast <- []byte(stockJSON):
+				default:
+					log.Println("No StockJSON sent on Broadcast")
 				}
 
 				// Acknowledge processing of the stock

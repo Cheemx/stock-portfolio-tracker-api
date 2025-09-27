@@ -6,6 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func WsRoutes(router *gin.Engine, cfg *config.APIConfig) {
-	router.GET("/ws", controllers.HandleWS(cfg))
+func SSERoutes(router *gin.Engine, cfg *config.APIConfig) {
+	router.GET("/api/events", controllers.HandleSSE(cfg))
 }
